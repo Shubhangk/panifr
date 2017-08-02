@@ -7,6 +7,7 @@ function Graph(nodes, links) {
     this.links_thresh_scale;
     this.min;
     this.max;
+    this.remove_clicked_node = false;
 
     this.refreshLinks = function () {
         if (checkpoints)
@@ -86,53 +87,99 @@ function Graph(nodes, links) {
          force.start();
      };
 
-     this.parseUpdates = function (edge_text) {
+     /**
+      * sets remove_clicked_node to false/true depending on whether there exists an edge with the clicked node in the updates
+      * only adds the edges which have not been already added to the graph. - handle this server side later on. may save the global array space
+      *
+      * */
+     this.parseUpdates = function (edge_text, clicked_data, connectedEdges) {
+         this.remove_clicked_node = true;
+         var temp = this;
+
          return d3.csv.parse(edge_text, function (d) {
-             return {
-                 source : +d.source,
-                 target : +d.target,
-                 paths : d.paths
-             };
+            // console.log(d);
+             //console.log(clicked_data);
+
+             if (temp.remove_clicked_node && (+d.target == clicked_data.name || +d.source == clicked_data.name)){
+                 console.log("hello");
+                 temp.remove_clicked_node = false;
+             }
+
+             if (connectedEdges[d.source + "-" + d.target] == undefined) {
+                 console.log(d);
+                 return {
+                     source: +d.source,
+                     target: +d.target,
+                     paths: d.paths
+                 };
+             } else {
+                 connectedEdges[d.source + "-" + d.target] = undefined;
+                 return undefined;
+             }
          });
      };
 
-     this.updateGraph = function (edge_text, clickednode, d) {
-         // parse the text
-         var updates = this.parseUpdates(edge_text);
+     this.getConnectedEdges = function (node) {
+         var ret = [];
+       d3.selectAll(".link")
+           .each(function (d) {
+               if ((+d.source.name == +node.name || +d.target.name == +node.name) && this != undefined){
+                   console.log(d);
+                   console.log(this);
+                   ret[d.source.name + "-" + d.target.name] = this;
+               }
+           });
+       return ret;
+       console.log(ret);
+     };
 
+     this.updateGraph = function (edge_text, clickednode, d) {
+         // get edges connecetd to the node
+         var connectedEdges = this.getConnectedEdges(d);
+         console.log(connectedEdges);
+
+         // parse the text
+         var updates = this.parseUpdates(edge_text, d, connectedEdges);
+         console.log(connectedEdges);
+         console.log(updates)
+
+         updates = updates.filter(function (d) {
+            return d != undefined;
+         });
+        /* var newconnectedEdges = connectedEdges.filter(function (d) {
+             console.log(d);
+             console.log(this);
+             return d != undefined;
+         });
+*/
          console.log(updates);
-         console.log(clickednode);
-         console.log(d);
+         console.log(connectedEdges);
 
          console.log(this.nodes);
 
-         // remove the clicked node from force
-         for (var i = 0; i < this.nodes.length; i++) {
-             if (+this.nodes[i].name == d.name) {
-           //      console.log("inside if");
-                 this.nodes.splice(i, 1);
-                 break;
+         // remove the clicked node from force if necessary
+         if (this.remove_clicked_node) {
+             for (var i = 0; i < this.nodes.length; i++) {
+                 if (+this.nodes[i].name == d.name) {
+                     this.nodes.splice(i, 1);
+                     break;
+                 }
              }
          }
 
-         //console.log(this.nodes);
-         //console.log(this.links);
+         console.log(connectedEdges);
+         console.log(this.links);
 
          // remove the edges corresponding to the clicked node
          for (var i = 0; i < this.links.length; i++){
-             if (this.links[i].source.name == d.name || this.links[i].target.name == d.name) {
-                 this.links.splice(i, 1);
-                 i--;
-             }
+            var edge = this.links[i].source.name + "-" + this.links[i].target.name;
+            if(connectedEdges[edge] != undefined){
+                console.log("removing "+edge);
+                this.links.splice(i,1);
+                i--;
+            }
          }
-
-         //console.log(this.links);
-
-        /* for (var i = 0; i < updates.length; i++){
-             this.links.push(updates[i]);
-         }*/
-
-         //console.log(this.links);
+         console.log(this.links);
 
          var min = this.min;
          var max = this.max;
@@ -142,6 +189,7 @@ function Graph(nodes, links) {
 
          // Add the new nodes to the nodes array
          updates.forEach(function(link) {
+
              min = Math.min(link.value, min);
              max = Math.max(link.value, max);
 
@@ -153,11 +201,6 @@ function Graph(nodes, links) {
                  target : targetnode,
                  paths : link.paths
              });
-
-             /*link.source = temp[link.source] ||
-                 (temp[link.source] = {name: link.source});
-             link.target = temp[link.target] ||
-                 (temp[link.target] = {name: link.target});*/
          });
 
          //console.log(this.nodes);
@@ -186,8 +229,6 @@ function Graph(nodes, links) {
                  logNodeData(this, d);
              })
              .call(force.drag);
-             //.merge(node);
-
 
          link = link.data(this.links);
 
@@ -222,7 +263,6 @@ function Graph(nodes, links) {
                  for (var i = 0 ; i < paths.length; i++) {
                      thislink.classed("path-" + paths[i], true);
                  }
-                // console.log(this);
              });
 
          // lets add some labels

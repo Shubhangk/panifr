@@ -1,3 +1,159 @@
+/**
+ * Change later on to add specific nodes for annotation.
+ * */
+var onclickAnnotate = function () {
+    if (checkpoints)
+        console.log("checkpoint : onClickAnnotate");
+  graph.addNode(100,200);
+};
+
+var viewHierarchies = function () {
+    if (checkpoints)
+        console.log("Checkpoint : viewHierarchies");
+    d3.select("#a")
+        .style("width", function () { return hierarchies_displayed ? "12%" : "25%"});
+    d3.select("#b")
+        .style("width", function () {return hierarchies_displayed ? "87%" : "74%"});
+    hierarchies_displayed = !hierarchies_displayed;
+};
+
+var clickRequest = function (clickednode, d) {
+    if (checkpoints)
+        console.log("checkpoint : clickRequest");
+
+    var myrequest = new XMLHttpRequest();
+    myrequest.open('GET', 'http://localhost:9997/server/clicked?node='+d.name);
+    myrequest.onload = function () {
+        if (checkpoints)
+            console.log("checkpoint : onloadExpand");
+
+        if (!debug)
+            console.log(myrequest.responseText);
+
+        graph.updateGraph(myrequest.responseText, clickednode, d);
+        d3.selectAll(".node")
+            .each(function (d) {
+                console.log(d);
+
+                var temp = d3.select(this);
+                for (var i = 0; i < this.classList.length; i++){
+                    if (this.classList[i] == "node")
+                        continue;
+                   temp.classed(this.classList[i], false);
+                }
+
+                for(var i = 0; i < nodepaths.length; i++){
+                    if (+nodepaths[i].node == d.name)
+                        temp.classed("path-"+ nodepaths[i].path, true);
+                }
+            });
+        console.log("done");
+    };
+    myrequest.send();
+};
+
+var expand = function (clickednode, d) {
+    if (checkpoints)
+        console.log("checkpoint : expand");
+    console.log("[debug : node #]" + d.name + " clicked...");
+    clickRequest(clickednode, d);
+};
+
+/**
+ * @event - #restore-default clicked
+ *
+ * @description
+ * restores all the nodes and edges to default color and opacity
+ * */
+var restoreDefault = function () {
+    if (checkpoints)
+        console.log("checkpoint : restoreDefault");
+    if (!initialized)
+        return;
+    d3.selectAll("circle")
+        .transition()
+        .duration(500)
+        .style("fill", "orange")
+        .style("opacity", 1);
+    d3.selectAll(".link")
+        .transition()
+        .duration(300)
+        .style("stroke", "grey")
+        .style("opacity", 1)
+        .style("stroke-width", "2px");
+};
+
+/**
+ * populates global pathNodesList array with path index - nodes mapping
+ * adds path-x classes to nodes for highlighting
+ * */
+var onloadNodePaths = function (responsetext) {
+    nodepaths = d3.csv.parse(responsetext, function (d) {
+        return {
+            node : d.node,
+            path : d.path,
+            positions : d.positions
+        };
+    });
+
+    d3.selectAll(".node")
+        .each(function (d, i) {
+            for (var i = 0; i < nodepaths.length; i++){
+                var path = +nodepaths[i].path;
+                var positions = nodepaths[i].positions.split(" ");
+                if (pathNodesList[path] == undefined)
+                    pathNodesList[path] = [];
+                positions.forEach(function (position) {
+                    pathNodesList[path][+position] = +nodepaths[i].node;
+                });
+                if (+nodepaths[i].node == d.name) {
+                    d3.select(this).classed("path-"+ path, true);
+                }
+            }
+        });
+};
+
+var getNodePathsRequest = function () {
+    if (checkpoints)
+        console.log("checkpoint : getNodePathsRequest");
+
+    var nodepathsrequest = new XMLHttpRequest();
+    nodepathsrequest.addEventListener("error", function (error) {console.log("Error : Server Request");});
+    nodepathsrequest.open('GET', 'http://localhost:9997/server/getnodepaths');
+    nodepathsrequest.onload = function () {onloadNodePaths(nodepathsrequest.responseText);};
+    nodepathsrequest.send();
+};
+
+var onloadHierachies = function (responsetext) {
+    if (checkpoints)
+        console.log("checkpoint : onLoadHierarchies")
+    if (debug)
+        console.log(responsetext);
+
+    var hierarchies = responsetext.split("|");
+    var leftconsoledisplay = d3.select("#left-console-display");
+    leftconsoledisplay.append("p");
+    hierarchies.forEach(function (line) {
+        leftconsoledisplay
+            .append("p")
+            .text(line)
+            .style("margin-left", "60%");
+    });
+};
+
+var hierarchiesRequest = function () {
+    if (checkpoints)
+        console.log("checkpoint : hierarchiesRequest");
+    var hierarchiesrequest = new XMLHttpRequest();
+    hierarchiesrequest.addEventListener("error", function (error) {console.log("Error : Server Request - Hierarchies");});
+    hierarchiesrequest.open('GET', 'http://localhost:9997/server/gethierarchies');
+    hierarchiesrequest.onload = function () {onloadHierachies(hierarchiesrequest.responseText);};
+    hierarchiesrequest.send();
+};
+
+/**
+ * @deprecated
+ * */
 var onloadPathNodes = function (responsetext, p_index) {
     if (checkpoints)
         console.log("checkpoint : onloadPathNodes");
@@ -12,6 +168,9 @@ var onloadPathNodes = function (responsetext, p_index) {
     logPath(p_index);
 };
 
+/**
+ * @deprecated
+ * */
 var pathNodesRequest = function (path_index, clicked) {
     if (checkpoints)
         console.log("checkpoint : pathNodesRequest");
@@ -22,6 +181,10 @@ var pathNodesRequest = function (path_index, clicked) {
     pathnodesrequest.send();
 };
 
+/**
+ * All nodes/edges selection necessary
+ * as required nodes/edges are highlighted while others are dimmed
+ * */
 var onclickPathName = function (clickedName) {
     console.log(clickedName);
 
@@ -57,12 +220,16 @@ var onclickPathName = function (clickedName) {
         })
         .style("opacity", function (d) {
             return d3.select(this).classed("path-" + p_index) ? 1 : 0.3;
+        })
+        .style("stroke-width", function (d) {
+            return d3.select(this).classed("path-" + p_index) ? "4px" : "2px";
         });
 
-    if (pathNodesList[p_index] == undefined)
+   /* if (pathNodesList[p_index] == undefined)
         pathNodesRequest(p_index, clickedName);
-    else
-        logPath(p_index);
+    else */
+
+    logPath(p_index);
 };
 
 var onloadPathNames = function (responsetext) {
@@ -100,94 +267,16 @@ var pathNamesRequest = function () {
     pathnamesrequest.send();
 };
 
-var onloadHierachies = function (responsetext) {
-    if (checkpoints)
-        console.log("checkpoint : onLoadHierarchies")
-    if (debug)
-        console.log(responsetext);
-
-    var hierarchies = responsetext.split("|");
-    var leftconsoledisplay = d3.select("#left-console-display");
-    leftconsoledisplay.append("p");
-    hierarchies.forEach(function (line) {
-
-        leftconsoledisplay
-            .append("p")
-            .text(line)
-            .style("margin-left", "60%");
-    });
-};
-
-var hierarchiesRequest = function () {
-    if (checkpoints)
-        console.log("checkpoint : hierarchiesRequest");
-    var hierarchiesrequest = new XMLHttpRequest();
-    hierarchiesrequest.addEventListener("error", function (error) {console.log("Error : Server Request - Hierarchies");});
-    hierarchiesrequest.open('GET', 'http://localhost:9997/server/gethierarchies');
-    hierarchiesrequest.onload = function () {onloadHierachies(hierarchiesrequest.responseText);};
-    hierarchiesrequest.send();
-};
-
-
-var onloadNodePaths = function (responsetext) {
-     nodepaths = d3.csv.parse(responsetext, function (d) {
-        return {
-            node : d.node,
-            path : d.path,
-            positions : d.positions
-        };
-    });
-
-    d3.selectAll(".node")
-        .each(function (d, i) {
-            /*for (var i = 0; i < nodepaths.length; i++){
-                if (+nodepaths[i].node == d.name) {
-                    var temp = nodepaths[i].paths.split(" ");
-                    if (debug)
-                        console.log(temp);
-                    for (var j = 0; j < temp.length; j++)
-                        d3.select(this).classed("path-"+ temp[j], true);
-                    break;
-                }
-            }*/
-            for (var i = 0; i < nodepaths.length; i++){
-                var path = +nodepaths[i].path;
-                var positions = nodepaths[i].positions.split(" ");
-                if (pathNodesList[path] == undefined)
-                    pathNodesList[path] = [];
-                positions.forEach(function (position) {
-                    pathNodesList[path][+position] = +nodepaths[i].node;
-                });
-                if (+nodepaths[i].node == d.name) {
-                    d3.select(this).classed("path-"+ path, true);
-                }
-            }
-        });
-};
-
-var getNodePathsRequest = function () {
-    if (checkpoints)
-        console.log("checkpoint : getNodePathsRequest");
-
-    var nodepathsrequest = new XMLHttpRequest();
-    nodepathsrequest.addEventListener("error", function (error) {console.log("Error : Server Request");});
-    nodepathsrequest.open('GET', 'http://localhost:9997/server/getnodepaths');
-    nodepathsrequest.onload = function () {onloadNodePaths(nodepathsrequest.responseText);};
-    nodepathsrequest.send();
-};
-
-
-
 var onloadInitGraph = function (responsetext) {
     if (debug)
         console.log(responsetext);
     if (checkpoints)
         console.log("checkpoint : onloadInitGraph");
     parseGraph(responsetext);
+    startForce();
     pathNamesRequest();
     hierarchiesRequest();
     getNodePathsRequest();
-    startForce();
 };
 
 var graphInitRequest = function () {
@@ -202,88 +291,4 @@ var graphInitRequest = function () {
         onloadInitGraph(myrequest.responseText);
     };
     myrequest.send();
-};
-
-
-
-/////////////// On Click Events ///////////////
-
-/**
- * Change later on to add specific nodes for annotation.
- * */
-var onclickAnnotate = function () {
-    if (checkpoints)
-        console.log("checkpoint : onClickAnnotate");
-  graph.addNode(100,200);
-};
-
-var viewHierarchies = function () {
-    if (checkpoints)
-        console.log("Checkpoint : viewHierarchies");
-    d3.select("#a")
-        .style("width", function () { return hierarchies_displayed ? "12%" : "25%"});
-    d3.select("#b")
-        .style("width", function () {return hierarchies_displayed ? "87%" : "74%"});
-    hierarchies_displayed = !hierarchies_displayed;
-};
-
-
-var clickRequest = function (clickednode, d) {
-    if (checkpoints)
-        console.log("checkpoint : clickRequest");
-
-    var myrequest = new XMLHttpRequest();
-    myrequest.open('GET', 'http://localhost:9997/server/clicked?node='+d.name);
-    myrequest.onload = function () {
-        if (checkpoints)
-            console.log("checkpoint : onloadExpand");
-
-        if (!debug)
-            console.log(myrequest.responseText);
-
-        graph.updateGraph(myrequest.responseText, clickednode, d);
-        d3.selectAll(".node")
-            .each(function (d) {
-                var temp = d3.select(this);
-               for (var i = 0; i < fr_pathnames.length; i++){
-                   temp.classed("path-"+i, false);
-               }
-               var paths = d.paths.split(" ");
-               for(var i = 0; i < paths.length; i++){
-                   temp.classed("path-"+paths[i], true);
-               }
-            });
-        console.log("done");
-    };
-    myrequest.send();
-};
-
-var expand = function (clickednode, d) {
-    if (checkpoints)
-        console.log("checkpoint : expand");
-    console.log("[debug : node #]" + d.name + " clicked...");
-    clickRequest(clickednode, d);
-};
-
-/**
- * @event - #restore-default clicked
- *
- * @description
- * restores all the nodes and edges to default color and opacity
- * */
-var restoreDefault = function () {
-    if (checkpoints)
-        console.log("checkpoint : restoreDefault");
-    if (!initialized)
-        return;
-    d3.selectAll("circle")
-        .transition()
-        .duration(500)
-        .style("fill", "orange")
-        .style("opacity", 1);
-    d3.selectAll(".link")
-        .transition()
-        .duration(300)
-        .style("stroke", "grey")
-        .style("opacity", 1);
 };

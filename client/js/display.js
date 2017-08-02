@@ -21,6 +21,11 @@ var logPath = function (p_index) {
         .append("hr");
 };
 
+/**
+ * Logs node data out to the console
+ *
+ * Node data includes : Node number, supporting paths, positions in those paths
+ * */
 var logNodeData = function (clickednode, d) {
     var node_display_text = "";
     node_display_text += "node : " + d.name + " | Supporting Subpaths : ";

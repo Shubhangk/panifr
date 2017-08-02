@@ -1,3 +1,8 @@
+
+/**
+ * Just rebinds the data and restarts layout.
+ * Should be used when something is added to he graph
+ * */
 var restart = function () {
     if (checkpoints)
         console.log("checkpoint : restart");
@@ -9,11 +14,24 @@ var restart = function () {
         .attr("class", "link")
         .style("stroke-width", "2px")
         .style("marker-end",  "url(#suit)");
+
     node = node.data(graph.nodes);
-    node.enter().insert("circle", ".cursor").attr("class", "node").attr("r", 5).call(force.drag);
+    node.enter()
+        .insert("circle", ".cursor")
+        .attr("class", "node")
+        .attr("r", 5)
+        .call(force.drag);
+
     force.start();
 };
 
+/**
+ * Should be called only once - during the start for initial graph rendering
+ *
+ * Prepares graph for rendering
+ * binds data (links, nodes, labels) to DOM elements
+ * starts the force layout for rendering
+ * */
 var startForce = function () {
     if (checkpoints)
         console.log("checkpoint : startForce");
@@ -39,6 +57,10 @@ var startForce = function () {
         .style("marker-end",  "url(#suit)"); // Modified line - arrowheads
 
     link.each(function (d) {
+        // add the selections to the global array
+        edgeSelections[d.source.name + "-" + d.target.name] = this;
+
+        // add classes for path highlight
         var temp_paths = d.paths.split(" ");
         for (var i = 0; i < temp_paths.length; i++){
             d3.select(this).classed("path-" + temp_paths[i], true);
@@ -63,6 +85,9 @@ var startForce = function () {
             console.log(this);
             console.log(d);
             logNodeData(this, d);
+        })
+        .each(function (d) {
+            nodeSelections[d.name] = this;
         })
         .style("outline", "white")
         .style("fill", "orange");
